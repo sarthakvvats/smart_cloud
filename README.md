@@ -67,7 +67,7 @@ The repository includes:
 
 ## License
 
-This repository is intended for academic and research use only.
+All rights reserved.
 
 ## Acknowledgements
 
