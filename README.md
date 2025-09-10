@@ -1,76 +1,130 @@
-# Intelligent Cloud Storage Tier Optimization using Reinforcement Learning
+# Intelligent Cloud Storage Tier Optimization (smart_cloud / TierOptimizer)
 
-This project presents a hybrid approach to cloud storage optimization by leveraging Reinforcement Learning (PPO) and access pattern prediction, optimized for both latency and cost. It operates on both synthetic and real-world cloud workload data (Google trace subset from WTA) and includes comparative evaluations and cost-benefit visualizations.
+This repository started as a research prototype (in `Cloud.ipynb`) that explores cloud storage tier optimization using Reinforcement Learning (PPO) and access-pattern modeling. During sprint/hackathon work we extracted the core notebook logic into a compact, testable backend service named TierOptimizer and added tests and CI to make the work easy to demo and extend.
 
-## Key Features
+Two complementary entry points in this repo:
 
-- Reinforcement Learning (PPO) for adaptive tier placement
-- Latency-aware and cost-aware reward function
-- Three-tier simulation: Hot, Warm, and Cold (e.g., SSD to HDD to Archive)
-- Synthetic and real-world trace compatibility
-- Visual analytics: tier-wise distribution, total cost, per-file cost margin
-- Designed for research-grade cloud storage benchmarking
+- Cloud.ipynb — the original notebook: data ingestion, PPO training experiments, visualizations, and research notes.
+- backend/ — a FastAPI backend that exposes the notebook inference logic as HTTP endpoints for quick demos and integration.
 
-## Files Overview
+Why both?
 
-- `Cloud.ipynb`: Main notebook for data ingestion, simulation, PPO logic, and visualizations
-- `google_cluster_trace_25k.csv`: Subset of WTA Google trace (25,000 entries) used for evaluation
-- `ppo_*_chart.png`: Bar and line plots comparing PPO vs original tiering
-- `overall_cost_with_margin_chart.png`: Cost and file-volume comparison with margin annotations
-- `ppo_reward.py`: Modular reward function for training PPO agents (optional for extension)
+- The notebook is the experimental record (figures, PPO training, trace analysis).
+- The backend is the engineering slice: the notebook's decision logic reimplemented as pure functions, validated by tests and ready to be integrated into a demo or a frontend.
 
-## Dataset
+Key features
 
-- Source: Workflow Trace Archive (WTA), https://wta.atlarge-research.com
-- Subset: Google Cloud traces (25,000-object sample)
-- Anonymized and preprocessed for storage-specific access simulation
+- Research-grade prototype:
+  - Reinforcement Learning (PPO) exploration in `Cloud.ipynb` (experimental, training code and plots).
+  - Latency- and cost-aware reward formulations used during experiments.
+- Production-lite backend (TierOptimizer):
+  - FastAPI endpoints: `/generate-mock`, `/recommend-tiers`, `/compute-costs`, `/health`.
+  - Canonical implementation in `backend/app/notebook_adapter.py` (reward, tier recommendation, movement matrix, cost calc).
+  - Pydantic v2 models for input/output validation (`backend/app/models.py`).
+  - Thin service layer (`backend/app/services/storage_service.py`) to isolate IO from core logic.
+  - Unit tests under `backend/tests` and a GitHub Actions CI workflow that runs them on Python 3.11/3.12.
 
-## Cost Model (in INR)
+Data & cost model
 
-- Cold Tier: ₹0.33 per GB, Latency: 500 ms
-- Warm Tier: ₹0.825 per GB, Latency: 150 ms
-- Hot Tier: ₹2.145 per GB, Latency: 20 ms
+- Original notebook used synthetic and WTA/Google trace subsets for evaluation.
+- Current backend uses synthetic mock generators for demos. If you want to reproduce experiments, place the trace CSV next to `Cloud.ipynb` and follow the notebook cells.
+- Example cost model used in experiments (INR per GB, illustrative):
+  - Cold Tier: ₹0.33/GB (high latency)
+  - Warm Tier: ₹0.825/GB
+  - Hot Tier: ₹2.145/GB (low latency)
 
-## Reward Function
+Compatibility & data types
 
-The hybrid reward function used during PPO training:
+- `FileMetadata.last_accessed` in the backend is represented as an epoch float (seconds since epoch) for numeric consistency across generators and Pydantic validation.
 
+Quickstart (backend demo)
 
-This balances access needs with cost penalties using domain-aware tuning.
+1. Create and activate a virtual environment:
 
-## Results Summary
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
 
-- Total Cost Reduction: From ₹822.77 to ₹57.08
-- Latency Efficiency: Approximately 45% of optimal hot-tier-only performance
-- PPO dynamically adapts file placement based on both access patterns and cost constraints
+2. Install dependencies and run the backend (from repo root):
 
-## Visualizations
+```bash
+pip install -r backend/requirements.txt
+pip install -r backend/requirements-dev.txt
+cd backend
+uvicorn app.main:app --reload --port 8000
+```
 
-The repository includes:
+3. Run tests (recommended before opening PRs):
 
-- Tier-wise cost comparison
-- File count vs tier allocation
-- Normalized latency and savings distribution
-- PPO vs Baseline (subset matched)
+```bash
+cd backend
+pytest -q
+```
 
-## Usage Instructions
+How the backend extends `Cloud.ipynb`
 
-1. Place `Cloud.ipynb` and `google_cluster_trace_25k.csv` in the working directory
-2. Run the notebook step-by-step in Jupyter or Google Colab
-3. All analysis results and charts will be generated automatically
+- Extracted core algorithms into `notebook_adapter.py` so the same logic can be called from code (notebook -> library).
+- Added small, deterministic mock data generators so the API can demo behavior without large trace files.
+- Normalized timestamp handling and numpy scalar conversions so Pydantic models accept API inputs/outputs without errors.
+- Added unit tests to protect behavior and a CI workflow to run those tests automatically on PRs.
 
-## Possible Extensions
+Contributing & PRs
 
-- Integrate LSTM-based access forecasting
-- Scale PPO training using `stable-baselines3`
-- Connect to live GCP or AWS S3 buckets for real-time decision-making
+- We included a PR template (`.github/PULL_REQUEST_TEMPLATE.md`) and CI (`.github/workflows/ci.yml`). Run tests locally before opening a PR.
+- If you intend to include the original dataset (`google_cluster_trace_25k.csv`), place it next to `Cloud.ipynb` and reference the notebook cells for the evaluation pipeline.
 
-## License
+Notes and next steps
 
-All rights reserved.
+- The current backend uses in-memory pandas operations; for larger datasets switch to batching or a job/worker design.
+- If you want datetimes instead of epoch floats, we can update Pydantic models to accept ISO datetimes and convert in the adapter.
+- Confirm license placement: a `license.md` exists; ensure a canonical `LICENSE` file is present if you plan to redistribute.
 
-## Acknowledgements
+Contact / Acknowledgements
 
-- Workflow Trace Archive
-- Google Cloud Trace dataset
-- PPO agent design adapted from OpenAI Gym and Stable Baselines3
+- Original dataset and design inspiration: Workflow Trace Archive (WTA), Google Cloud traces.
+- To propose changes, open a PR against `main` on the fork and tag reviewers.
+
+## How to reproduce notebook experiments (quick checklist)
+
+If you want to re-run the experiments in `Cloud.ipynb` and compare results with the backend outputs, follow this checklist. The right column shows the notebook concept/section and the backend function that implements the same logic (useful when validating parity).
+
+1. Prepare dataset
+
+- Notebook: data ingestion and preprocessing cells (load CSV, clean, sample)
+- Backend mapping: `notebook_adapter.generate_clean_normalized_dataset` (for synthetic data) or use `df_from_payload` with your preprocessed DataFrame
+
+2. Feature normalization & tier assignment
+
+- Notebook: normalization & heuristic tier assignment cells
+- Backend mapping: `notebook_adapter.generate_clean_normalized_dataset` (normalization), `notebook_adapter.recommend_best_tier` (recommendation)
+
+3. Reward function / scoring
+
+- Notebook: reward formula cells used by PPO training and evaluation
+- Backend mapping: `notebook_adapter.calculate_reward`
+
+4. Recommendation inference
+
+- Notebook: inference/evaluation cells where per-file rewards are computed
+- Backend mapping: `notebook_adapter.recommend_best_tier` (returns `recommended_tier` and `simulated_reward`)
+
+5. Movement summary and transition matrix
+
+- Notebook: aggregation/transition visualization cells
+- Backend mapping: `notebook_adapter.movement_summary`, `notebook_adapter.movement_matrix`
+
+6. Cost calculation and comparison
+
+- Notebook: cost model & experiment-summary cells
+- Backend mapping: `notebook_adapter.compute_costs`
+
+7. Time-series access simulation (optional)
+
+- Notebook: per-file time-series generation cells
+- Backend mapping: `notebook_adapter.generate_access_time_series`
+
+Quick verification steps
+
+- Start the backend (see Quickstart above) and call `/generate-mock` to produce a deterministic dataset. Use the generated records, POST them to `/recommend-tiers`, then call `/compute-costs` on the original vs recommended tiers and compare the numbers to the notebook's evaluation cells.
+- If you want to reproduce PPO training and visualizations, run the notebook cells; the backend is intended for inference/demo (not training).
